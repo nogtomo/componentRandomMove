@@ -1,0 +1,96 @@
+// MELスクリプト：シンプルなランダム移動（相対移動・スライダー指定）
+
+// 小数点以下を丸める
+global proc float roundToDecimal(float $value, int $places) {
+    float $mult = `pow 10 $places`;
+    return (floor($value * $mult + 0.5)) / $mult;
+}
+
+// 頂点取得（フェース・エッジも対応）
+global proc string[] getVertexSelection() {
+    string $selection[] = `ls -sl -fl`;
+    string $vertices[];
+    for ($item in $selection) {
+        if (`gmatch $item "*.vtx[*]"`) {
+            $vertices[size($vertices)] = $item;
+        } else {
+            string $converted[] = `polyListComponentConversion -toVertex $item`;
+            string $flattened[] = `ls -fl $converted`;
+            $vertices = stringArrayCatenate($vertices, $flattened);
+        }
+    }
+    return $vertices;
+}
+
+// ランダム移動処理（相対のみ）
+global proc randomMoveComponentsSimple(float $rangeX, float $rangeY, float $rangeZ, int $doX, int $doY, int $doZ) {
+    string $vertices[] = getVertexSelection();
+    if (!size($vertices)) {
+        warning "頂点が見つかりません。";
+        return;
+    }
+    undoInfo -openChunk;
+    textScrollList -e -removeAll resultLog;
+    for ($vtx in $vertices) {
+        float $randX = $doX ? rand(-$rangeX, $rangeX) : 0;
+        float $randY = $doY ? rand(-$rangeY, $rangeY) : 0;
+        float $randZ = $doZ ? rand(-$rangeZ, $rangeZ) : 0;
+
+        float $pos[] = `pointPosition -w $vtx`;
+        float $newX = roundToDecimal($pos[0] + $randX, 2);
+        float $newY = roundToDecimal($pos[1] + $randY, 2);
+        float $newZ = roundToDecimal($pos[2] + $randZ, 2);
+
+        xform -ws -t $newX $newY $newZ $vtx;
+        string $msg = $vtx + ": X+" + $randX + " Y+" + $randY + " Z+" + $randZ;
+        textScrollList -e -append $msg resultLog;
+    }
+    undoInfo -closeChunk;
+}
+
+// UI作成
+global proc openSimpleRandomMoveUI() {
+    if (`window -exists simpleRandomMoveWin`) deleteUI simpleRandomMoveWin;
+    window -title "シンプル ランダム移動ツール" -widthHeight 400 350 simpleRandomMoveWin;
+    columnLayout -adjustableColumn true;
+    text -label "■ ランダム移動範囲を設定（スライダー）";
+
+    rowLayout -nc 2; checkBox -label "X軸" -v true xCheck;
+    floatSliderGrp -field true -label "" -minValue -5 -maxValue 5 -fieldMinValue -100 -fieldMaxValue 100 -value 0 xRange;
+    setParent..;
+
+    rowLayout -nc 2; checkBox -label "Y軸" -v true yCheck;
+    floatSliderGrp -field true -label "" -minValue -5 -maxValue 5 -fieldMinValue -100 -fieldMaxValue 100 -value 0 yRange;
+    setParent..;
+
+    rowLayout -nc 2; checkBox -label "Z軸" -v true zCheck;
+    floatSliderGrp -field true -label "" -minValue -5 -maxValue 5 -fieldMinValue -100 -fieldMaxValue 100 -value 0 zRange;
+    setParent..;
+
+    separator -style "in";
+    button -label "ランダムに移動" -h 40 -c "executeSimpleRandomMove()";
+    separator -style "in";
+    text -label "■ 実行ログ";
+    textScrollList -numberOfRows 8 -ams false resultLog;
+    showWindow simpleRandomMoveWin;
+}
+
+// 実行処理
+global proc executeSimpleRandomMove() {
+    float $x = `floatSliderGrp -q -value xRange`;
+    float $y = `floatSliderGrp -q -value yRange`;
+    float $z = `floatSliderGrp -q -value zRange`;
+
+    int $doX = `checkBox -q -v xCheck`;
+    int $doY = `checkBox -q -v yCheck`;
+    int $doZ = `checkBox -q -v zCheck`;
+
+    randomMoveComponentsSimple($x, $y, $z, $doX, $doY, $doZ);
+}
+
+// エントリポイント
+global proc componentRandomMoveUI() {
+    openSimpleRandomMoveUI();
+}
+
+componentRandomMoveUI();
